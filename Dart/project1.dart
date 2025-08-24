@@ -1,3 +1,30 @@
+class Person {
+  final String id;
+  final String name;
+  final DateTime? birthDate;
+  final String no_telp;
+  String email;
+
+  Person({
+    required this.id,
+    required this.name,
+    required this.birthDate,
+    required this.no_telp,
+    this.email = "Unknown",
+  });
+
+  int get Age {
+    if (birthDate == null) throw Exception("Birth date can't be null");
+    DateTime now = DateTime.now();
+    int age = now.year - birthDate!.year;
+
+    if (birthDate!.year < now.year ||
+        (birthDate!.month == now.month && birthDate!.day < now.day))
+      age--;
+    return age;
+  }
+}
+
 class Task {
   final String id;
   final String title;
@@ -17,12 +44,36 @@ class Task {
          assigned.isBefore(deadline),
          "Assignment day must be more than the Deadline day",
        ) {
-    if (deadline.day - assigned.day >= 3)
+    final diffDay = deadline.difference(assigned).inDays;
+
+    if (diffDay >= 3)
       priority = "High";
-    else if (deadline.day - assigned.day == 2)
+    else if (diffDay == 2)
       priority = "Medium";
     else
       priority = "Low";
+  }
+
+  void completedTask() => isDone = true;
+}
+
+class Manajemen {
+  List<Task> _task = [];
+
+  Task getTaskID(String id) {
+    return _task.firstWhere(
+      (t) => t.id == id,
+      orElse: () => throw Exception("Task with ID ($id) not found"),
+    );
+  }
+
+  void addTask(Task task) {
+    if (_task.contains(task.id) && _task.contains(task.title))
+      throw Exception("Task already added");
+
+    // if (_task.contains(task.priority = "High"))
+    _task.add(task);
+    print("Task (${task.title}) added");
   }
 }
 
