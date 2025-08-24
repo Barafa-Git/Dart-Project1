@@ -35,6 +35,13 @@ void main() {
       deadline: DateTime(2025, 9, 11, 11, 30),
     );
 
+    var task2 = Task(
+      id: "T002",
+      title: "Human Thinking",
+      assigned: DateTime(2025, 9, 12, 12, 30),
+      deadline: DateTime(2025, 9, 11, 11, 30),
+    );
+
     print(task1.priority);
   } catch (e) {
     print("Error : $e");
