@@ -11,7 +11,10 @@ class Person {
     required this.birthDate,
     required this.no_telp,
     this.email = "Unknown",
-  });
+  }) {
+    if (no_telp.length > 13)
+      throw Exception("Maximum digit telpon number is 13");
+  }
 
   int get Age {
     if (birthDate == null) throw Exception("Birth date can't be null");
@@ -23,6 +26,21 @@ class Person {
       age--;
     return age;
   }
+}
+
+class Lecturer extends Person {
+  final String specialization;
+  final String studyRecord;
+
+  Lecturer({
+    required super.id,
+    required super.name,
+    required super.birthDate,
+    required super.no_telp,
+    super.email = "Unknown",
+    required this.specialization,
+    required this.studyRecord,
+  });
 }
 
 class Task {
