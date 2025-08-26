@@ -1,178 +1,274 @@
+import 'dart:collection';
+
+enum Priority { high, medium, low }
+
+enum TaskStatus { pending, completed, overdue }
+
 class Task {
   final String id;
   final String title;
-  String priority;
-  bool isDone;
-  DateTime assigned;
-  DateTime deadline;
-  DateTime? submitDate;
+  final String description;
+  final Priority priority;
+  final String category;
+  final DateTime assignedDate;
+  final DateTime deadline;
+  TaskStatus status;
+  DateTime? completedDate;
 
   Task({
     required this.id,
     required this.title,
-    this.priority = "",
-    this.isDone = false,
-    required this.assigned,
+    this.description = "",
+    required this.priority,
+    required this.category,
+    required this.assignedDate,
     required this.deadline,
-    this.submitDate,
-  }) : assert(submitDate != null, "This task hasn't been submitted yet.") {
-    if (deadline.isBefore(assigned))
-      throw Exception("Assignment day must be more than the Deadline day");
-
-    final diffDay = deadline.difference(assigned).inDays;
-
-    if (diffDay >= 3)
-      priority = "Low";
-    else if (diffDay == 2)
-      priority = "Medium";
-    else
-      priority = "High";
-  }
-
-  void completedTask(DateTime submitDate) {
-    if (submitDate.isBefore(assigned)) {
-      throw Exception("Task cannot be submitted before it is assigned");
-    }
-    if (submitDate.isAfter(deadline)) {
-      throw Exception("Deadline missed! Task cannot be submitted");
+  }) : status = TaskStatus.pending {
+    if (deadline.isBefore(assignedDate)) {
+      throw Exception("Deadline cannot be before assigned date");
     }
 
-    isDone = true;
+    // Update status if task is already overdue
+    if (DateTime.now().isAfter(deadline)) {
+      status = TaskStatus.overdue;
+    }
   }
+
+  void completeTask() {
+    if (DateTime.now().isAfter(deadline)) {
+      status = TaskStatus.overdue;
+      throw Exception("Cannot complete task: deadline has passed");
+    }
+
+    status = TaskStatus.completed;
+    completedDate = DateTime.now();
+  }
+
+  void updateStatus() {
+    if (status != TaskStatus.completed && DateTime.now().isAfter(deadline)) {
+      status = TaskStatus.overdue;
+    }
+  }
+
+  int get daysUntilDeadline {
+    final now = DateTime.now();
+    return deadline.difference(now).inDays;
+  }
+
+  bool get isDueSoon => daysUntilDeadline <= 3 && status == TaskStatus.pending;
 }
 
-class Manajemen {
-  List<Task> _task = [];
+class TaskManager {
+  final List<Task> _tasks = [];
 
-  Task getTaskID(String id) {
-    return _task.firstWhere(
-      (t) => t.id == id,
-      orElse: () => throw Exception("Task with ID ($id) not found"),
+  void addTask(Task task) {
+    // Check for duplicate task (same title in same category)
+    if (_tasks.any(
+      (t) =>
+          t.title == task.title &&
+          t.category == task.category &&
+          t.status != TaskStatus.completed,
+    )) {
+      throw Exception("Task with same title already exists in this category");
+    }
+
+    // Check for high priority task limit (only pending ones)
+    if (task.priority == Priority.high) {
+      final highPriorityCount = _tasks
+          .where(
+            (t) =>
+                t.priority == Priority.high && t.status == TaskStatus.pending,
+          )
+          .length;
+
+      if (highPriorityCount >= 5) {
+        throw Exception("Cannot have more than 5 active high priority tasks");
+      }
+    }
+
+    _tasks.add(task);
+    print("Task '${task.title}' added successfully");
+  }
+
+  void removeTask(String taskId) {
+    _tasks.removeWhere((task) => task.id == taskId);
+    print("Task removed successfully");
+  }
+
+  void completeTask(String taskId) {
+    final task = _getTaskById(taskId);
+    task.completeTask();
+    print("Task '${task.title}' marked as completed");
+  }
+
+  Task _getTaskById(String id) {
+    return _tasks.firstWhere(
+      (task) => task.id == id,
+      orElse: () => throw Exception("Task with ID $id not found"),
     );
   }
 
-  void addTask(Task task) {
-    if (_task.contains(task.id) && _task.contains(task.title))
-      throw Exception("Task already added");
-
-    var highPriorityTask = _task.where((t) => t.priority == "High").toList();
-
-    if (highPriorityTask.length > 5)
-      throw Exception(
-        "Can't add more high priority tasks in the same time, the maximum is 5",
-      );
-
-    _task.add(task);
-    print("Task (${task.title}) added");
+  List<Task> getTasksByStatus(TaskStatus status) {
+    return _tasks.where((task) => task.status == status).toList();
   }
 
-  void submitTask(Task task, DateTime submitDate) {
-    task.completedTask(submitDate);
-    task.submitDate = submitDate;
-    // _task.remove(task);
-    print("Task (${task.title}) submitted successfully on $submitDate");
+  List<Task> getTasksByPriority(Priority priority) {
+    return _tasks.where((task) => task.priority == priority).toList();
   }
 
-  void checkStatusTask({required bool status}) {
-    var Task = _task.where((t) => t.isDone == status).toList();
+  List<Task> getTasksByCategory(String category) {
+    return _tasks.where((task) => task.category == category).toList();
+  }
 
-    if (status == true)
-      print("COMPLETED TASK");
-    else
-      print("ASSIGNED TASK");
-    print("=====================");
+  List<Task> searchTasks(String keyword) {
+    final searchTerm = keyword.toLowerCase();
+    return _tasks
+        .where(
+          (task) =>
+              task.title.toLowerCase().contains(searchTerm) ||
+              task.description.toLowerCase().contains(searchTerm),
+        )
+        .toList();
+  }
 
-    for (var item in Task) {
-      print("ID       : ${item.id}");
-      print("Title    : ${item.title}");
-      print("Priority : ${item.priority}");
-      print("Date Assigned : ${item.assigned}");
-      print("Deadline : ${item.deadline}");
-      print("Submit Date   : ${item.submitDate}");
-      print("=====================");
+  List<Task> getDueSoonTasks() {
+    return _tasks.where((task) => task.isDueSoon).toList();
+  }
+
+  void updateAllStatuses() {
+    for (final task in _tasks) {
+      task.updateStatus();
     }
   }
 
-  void orderByPriority(String priority) {
-    var task = _task
-        .where((t) => t.priority.toLowerCase() == priority.toLowerCase())
-        .toList();
+  Map<String, int> getProductivityStats() {
+    final now = DateTime.now();
+    final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
 
-    if (task.isEmpty) throw Exception("There are no $priority priority tasks");
+    final weeklyCompleted = _tasks
+        .where(
+          (task) =>
+              task.status == TaskStatus.completed &&
+              task.completedDate != null &&
+              task.completedDate!.isAfter(startOfWeek),
+        )
+        .length;
 
-    print("TASK PRIORITY : $priority");
-    print("=======================");
-    for (var item in task) {
-      print("ID       : ${item.id}");
-      print("Title    : ${item.title}");
-      print("Date Assigned : ${item.assigned}");
-      print("Deadline : ${item.deadline}");
-      print("Submit Date   : ${item.submitDate}");
-      print("=====================");
+    return {
+      'total': _tasks.length,
+      'completed': _tasks
+          .where((task) => task.status == TaskStatus.completed)
+          .length,
+      'pending': _tasks
+          .where((task) => task.status == TaskStatus.pending)
+          .length,
+      'overdue': _tasks
+          .where((task) => task.status == TaskStatus.overdue)
+          .length,
+      'weekly_completed': weeklyCompleted,
+    };
+  }
+
+  void displayTasks(List<Task> tasks, {String title = "TASKS"}) {
+    print("\n$title");
+    print("=" * 50);
+
+    if (tasks.isEmpty) {
+      print("No tasks found");
+      return;
+    }
+
+    for (final task in tasks) {
+      final statusIcon = task.status == TaskStatus.completed
+          ? "✓"
+          : task.status == TaskStatus.overdue
+          ? "!"
+          : "•";
+
+      print(
+        "$statusIcon [${task.priority.toString().split('.').last.toUpperCase()}] ${task.title}",
+      );
+      print("  Category: ${task.category}");
+      print(
+        "  Due: ${task.deadline.toString().split(' ')[0]} (in ${task.daysUntilDeadline} days)",
+      );
+      print("  Status: ${task.status.toString().split('.').last}");
+
+      if (task.status == TaskStatus.completed && task.completedDate != null) {
+        print("  Completed: ${task.completedDate.toString().split(' ')[0]}");
+      }
+
+      print("-" * 30);
     }
   }
 }
 
 void main() {
   try {
-    var task1 = Task(
-      id: "T001",
-      title: "Brain Illness",
-      assigned: DateTime(2025, 9, 10, 12, 30),
-      deadline: DateTime(2025, 9, 11, 11, 30),
+    final manager = TaskManager();
+    final now = DateTime.now();
+
+    // Add some tasks
+    manager.addTask(
+      Task(
+        id: "1",
+        title: "Presentasi Proyek X",
+        description: "Persiapan presentasi untuk klien",
+        priority: Priority.high,
+        category: "Pekerjaan",
+        assignedDate: now,
+        deadline: now.add(Duration(days: 7)), // deadline 7 hari ke depan
+      ),
     );
 
-    var task2 = Task(
-      id: "T002",
-      title: "Human Thinking",
-      assigned: DateTime(2025, 9, 12, 12, 30),
-      deadline: DateTime(2025, 9, 13, 11, 30),
+    manager.addTask(
+      Task(
+        id: "2",
+        title: "Review Laporan",
+        description: "Review laporan keuangan bulanan",
+        priority: Priority.medium,
+        category: "Pekerjaan",
+        assignedDate: now,
+        deadline: now.add(Duration(days: 2)), // deadline 2 hari ke depan
+      ),
     );
 
-    var task3 = Task(
-      id: "T003",
-      title: "Human Evolution",
-      assigned: DateTime(2025, 9, 12, 12, 30),
-      deadline: DateTime(2025, 9, 13, 11, 30),
+    manager.addTask(
+      Task(
+        id: "3",
+        title: "Belanja Bulanan",
+        description: "Belanja kebutuhan bulanan",
+        priority: Priority.low,
+        category: "Pribadi",
+        assignedDate: now,
+        deadline: now.add(Duration(days: 4)), // deadline 4 hari ke depan
+      ),
     );
 
-    var task4 = Task(
-      id: "T004",
-      title: "Neuro Scient",
-      assigned: DateTime(2025, 9, 12, 12, 30),
-      deadline: DateTime(2025, 9, 13, 11, 30),
+    // Display all tasks
+    manager.displayTasks(
+      manager.getTasksByStatus(TaskStatus.pending),
+      title: "PENDING TASKS",
     );
 
-    var task5 = Task(
-      id: "T005",
-      title: "Human Thinking",
-      assigned: DateTime(2025, 9, 12, 12, 30),
-      deadline: DateTime(2025, 9, 13, 11, 30),
-    );
+    // Complete a task
+    manager.completeTask("2");
 
-    var task6 = Task(
-      id: "T006",
-      title: "Human Resource",
-      assigned: DateTime(2025, 9, 12, 12, 30),
-      deadline: DateTime(2025, 9, 13, 11, 30),
-    );
+    // Search tasks
+    final searchResults = manager.searchTasks("presentasi");
+    manager.displayTasks(searchResults, title: "SEARCH RESULTS");
 
-    print(task1.priority);
+    // Show due soon tasks
+    manager.displayTasks(manager.getDueSoonTasks(), title: "DUE SOON TASKS");
 
-    var manajemen = Manajemen();
-    manajemen.addTask(task1);
-    manajemen.addTask(task2);
-    manajemen.addTask(task3);
-    manajemen.addTask(task4);
-    manajemen.addTask(task5);
-    manajemen.addTask(task6);
-
-    manajemen.submitTask(task1, DateTime(2025, 9, 11, 10, 00));
-
-    manajemen.checkStatusTask(status: false);
-    print("");
-    manajemen.orderByPriority("High");
+    // Show statistics
+    print("\nPRODUCTIVITY STATS");
+    print("=" * 30);
+    final stats = manager.getProductivityStats();
+    stats.forEach((key, value) {
+      print("${key.replaceAll('_', ' ').toUpperCase()}: $value");
+    });
   } catch (e) {
-    print("$e");
+    print("Error: $e");
   }
 }
