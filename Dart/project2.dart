@@ -1,23 +1,27 @@
-// Book ENUM
+// ======================================================
+// 📚 LIBRARY MANAGEMENT SYSTEM
+// ======================================================
 
+// ======================= 📖 BOOK ENUM =======================
 enum BookCategory {
   science,
   technology,
-  litelature,
+  literature,
   psychology,
   religion,
   language,
+  romance,
 }
 
 enum BookStatus { available, booked, ordered }
 
 enum BookType { physique, digital }
 
+// ======================= 📖 BOOK CLASS =======================
 class Book {
   final String id;
   final String title;
   final String author;
-  int stock;
   DateTime releaseDate;
   BookCategory? category;
   BookStatus? status;
@@ -27,7 +31,6 @@ class Book {
     required this.id,
     required this.title,
     required this.author,
-    this.stock = 0,
     required this.releaseDate,
     required this.category,
     required this.status,
@@ -35,6 +38,7 @@ class Book {
   });
 }
 
+// ======================= 💻 DIGITAL BOOK =======================
 class DigitalBook extends Book {
   final String format;
   final double fileSize;
@@ -44,7 +48,6 @@ class DigitalBook extends Book {
     required super.id,
     required super.title,
     required super.author,
-    super.stock = 0,
     required super.releaseDate,
     required super.category,
     required super.status,
@@ -55,16 +58,16 @@ class DigitalBook extends Book {
   });
 }
 
-class physiqueBook extends Book {
+// ======================= 📕 PHYSICAL BOOK =======================
+class PhysiqueBook extends Book {
   final String shelfLocation;
   final String seriesNumber;
 
-  physiqueBook({
+  PhysiqueBook({
     required super.id,
     required super.title,
     required super.author,
     required super.releaseDate,
-    super.stock = 0,
     required super.category,
     required super.status,
     required super.type,
@@ -73,11 +76,12 @@ class physiqueBook extends Book {
   });
 }
 
-// Member ENUM
+// ======================= 👤 MEMBER ENUM =======================
 enum MemberStatus { active, nonActive, suspended }
 
 enum MemberPosition { professors, student }
 
+// ======================= 👤 MEMBER CLASS =======================
 class Member {
   final String id;
   final String name;
@@ -96,75 +100,195 @@ class Member {
     required this.position,
     required this.status,
     this.totalDay = 0,
-  });
+  }) : assert(email.contains("@gmail.com"), "Email must contain @gmail.com");
 
   void addBook(String id) {
-    if (bookIDs.contains(id))
-      throw Exception("Member already borrowed book with ID ($id)");
+    if (bookIDs.contains(id)) {
+      throw Exception("⚠️ Member already borrowed book with ID ($id)");
+    }
     bookIDs.add(id);
-    print("Book added to borrowed history");
+    print("✅ Book added to borrowed history");
   }
 }
 
-class borrowSystem {
+// ======================= 📦 BORROW SYSTEM =======================
+class BorrowSystem {
   DateTime borrowDate;
-  int quantity;
   Book book;
   Member member;
 
-  borrowSystem({
+  BorrowSystem({
     required this.borrowDate,
-    required this.quantity,
     required this.book,
     required this.member,
-  }) : assert(quantity > 0, "Borrow Quantity can't be nagative");
+  });
 }
 
+// ======================= 🏛️ LIBRARY MANAGEMENT =======================
 class LibraryManagement {
   List<Book> _book = [];
   List<Member> _member = [];
-  List<borrowSystem> _borrow = [];
+  List<BorrowSystem> _borrow = [];
 
+  // 📖 GET BOOK DATA
   Book getBookData(String id) {
     return _book.firstWhere(
       (b) => b.id == id,
-      orElse: () => throw Exception("Book not found"),
+      orElse: () => throw Exception("⚠️ Book not found"),
     );
   }
 
+  // 👤 GET MEMBER DATA
   Member getMemberData(String id) {
     return _member.firstWhere(
       (m) => m.id == id,
-      orElse: () => throw Exception("Member not found"),
+      orElse: () => throw Exception("⚠️ Member not found"),
     );
   }
 
+  // ➕ ADD BOOK
   void addBook(Book book) {
-    if (_book.contains(book.id)) throw Exception("Book Already Added");
-
+    if (_book.any((b) => b.id == book.id)) {
+      throw Exception("⚠️ Book with ID (${book.id}) already exists");
+    }
     _book.add(book);
-    print("Book added");
+    print("📚 Book '${book.title}' added");
   }
 
+  // ➕ ADD MEMBER
   void addMember(Member member) {
-    if (_member.contains(member.id)) throw Exception("Member Already Added");
-
+    if (_member.any((m) => m.id == member.id)) {
+      throw Exception("⚠️ Member with ID (${member.id}) already exists");
+    }
     _member.add(member);
-    print("member added");
+    print("👤 Member '${member.name}' added");
   }
 
+  // 🔑 BORROW BOOK
   void borrowBook({
     required String memberID,
     required String bookID,
     required DateTime borrowDate,
-    required int quantity,
   }) {
     var member = getMemberData(memberID);
     var book = getBookData(bookID);
 
-    if (member.bookIDs.contains(book.id))
-      throw Exception("${member.name} already borrow ${book.title}");
+    if (member.bookIDs.contains(book.id)) {
+      throw Exception("⚠️ ${member.name} already borrowed ${book.title}");
+    }
+
+    if (member.status == MemberStatus.suspended) {
+      throw Exception("⛔ Suspended member can't borrow books");
+    }
+
+    int borrowWithinPeriod = _borrow
+        .where(
+          (b) =>
+              b.member == member &&
+              borrowDate.difference(b.borrowDate).inDays.abs() <=
+                  (member.position == MemberPosition.student ? 14 : 30),
+        )
+        .length;
+
+    if (member.position == MemberPosition.student && borrowWithinPeriod >= 5) {
+      throw Exception("⚠️ Students can borrow max 5 books within 14 days");
+    }
+
+    if (member.position == MemberPosition.professors &&
+        borrowWithinPeriod >= 10) {
+      throw Exception("⚠️ Professors can borrow max 10 books within 30 days");
+    }
+
+    var newBorrowed = BorrowSystem(
+      borrowDate: borrowDate,
+      book: book,
+      member: member,
+    );
+
+    _borrow.add(newBorrowed);
+    member.bookIDs.add(bookID);
+    book.status = BookStatus.booked;
+
+    print("📖 '${book.title}' borrowed by ${member.name}");
+  }
+
+  // 📜 CHECK BORROW HISTORY
+  void checkBorrowHistory(String memberID) {
+    if (_member.isEmpty) throw Exception("⚠️ No member added");
+    if (_book.isEmpty) throw Exception("⚠️ No book added");
+    if (_borrow.isEmpty) throw Exception("⚠️ No borrow history");
+
+    var member = getMemberData(memberID);
+    var books = _book.where((b) => member.bookIDs.contains(b.id)).toList();
+
+    print("\n📜 Borrowed History of ${member.name}");
+    print("=====================================");
+    for (var item in books) {
+      print("📘 Title       : ${item.title}");
+      print("✍️  Author      : ${item.author}");
+      print("🏷️  Category    : ${item.category?.name}");
+      print("📅 Release Date: ${item.releaseDate}");
+      print("📊 Status      : ${item.status?.name}");
+      print("📂 Type        : ${item.type?.name}");
+      print("-------------------------------------");
+    }
+    // .name this is a special propertie in Dart enum, .name is used for show real variable name in enum when it called
   }
 }
 
-void main() {}
+void main() {
+  var management = LibraryManagement();
+
+  var digitalBook1 = DigitalBook(
+    id: "B001",
+    title: "September",
+    author: "Angga",
+    releaseDate: DateTime(2019, 9, 23, 20, 00),
+    category: BookCategory.romance,
+    status: BookStatus.available,
+    type: BookType.digital,
+    format: "PDF",
+    fileSize: 200,
+    link: "https://example.com",
+  );
+
+  var physiqueBook1 = PhysiqueBook(
+    id: "B002",
+    title: "Beautiful in White",
+    author: "Angga",
+    releaseDate: DateTime(2018, 11, 11, 20, 00),
+    category: BookCategory.romance,
+    status: BookStatus.available,
+    type: BookType.physique,
+    shelfLocation: "R1-0001",
+    seriesNumber: "2",
+  );
+
+  management.addBook(digitalBook1);
+  management.addBook(physiqueBook1);
+
+  var member1 = Member(
+    id: "M001",
+    name: "Wina",
+    email: "wina23@gmail.com",
+    major: "Medicine",
+    position: MemberPosition.student,
+    status: MemberStatus.active,
+  );
+
+  management.addMember(member1);
+
+  management.borrowBook(
+    memberID: member1.id,
+    bookID: digitalBook1.id,
+    borrowDate: DateTime.now(),
+  );
+
+  management.borrowBook(
+    memberID: member1.id,
+    bookID: physiqueBook1.id,
+    borrowDate: DateTime.now(),
+  );
+
+  management.checkBorrowHistory(member1.id);
+}
