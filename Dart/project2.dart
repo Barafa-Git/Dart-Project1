@@ -179,29 +179,6 @@ class LibraryManagement {
     print("👤 Member '${member.name}' added");
   }
 
-  // ----------------- SEARCH SECTION -------------------
-  void checkBookbyTitle({required String bookTitle}) {
-    if (_book.isEmpty) throw Exception("Book data is empty");
-
-    var book = _book.where(
-      (b) => b.title.toLowerCase().contains(bookTitle.toLowerCase()),
-    );
-
-    if (book.isEmpty) throw Exception("Book with title $bookTitle not found");
-
-    print("\nSearch Result Book [$bookTitle]");
-    print("==========================================");
-    for (var item in book) {
-      print("Title    : ${item.title}");
-      print("Author   : ${item.author}");
-      print("Category : ${item.category?.name}");
-      print("Release Date : ${item.releaseDate}");
-      print("==========================================");
-    }
-  }
-
-  // ----------------- SEARCH SECTION -------------------
-
   // ---------------- SEARCH FUNCTIONS ----------------
   List<Book> getBookByTitle(String title) {
     return _book
@@ -227,7 +204,11 @@ class LibraryManagement {
   }
 
   // ---------------- OUTPUT FUNCTION ----------------
-  void printBooks(String searchType, String keyword, List<Book> books) {
+  void printBooks({
+    required String searchType,
+    required String keyword,
+    required List<Book> books,
+  }) {
     if (books.isEmpty) {
       print("⚠️ No book found for $searchType [$keyword]");
       return;
@@ -462,13 +443,25 @@ void main() {
     management.historyReturn(memberID: member1.id);
 
     var byTitle = management.getBookByTitle("beautiful");
-    management.printBooks("Title", "beautiful", byTitle);
+    management.printBooks(
+      searchType: "Title",
+      keyword: "beautiful",
+      books: byTitle,
+    );
 
     var byAuthor = management.getBookByAuthor("angga");
-    management.printBooks("Author", "angga", byAuthor);
+    management.printBooks(
+      searchType: "Author",
+      keyword: "angga",
+      books: byAuthor,
+    );
 
     var byCategory = management.getBookByCategory("science");
-    management.printBooks("Category", BookCategory.romance.name, byCategory);
+    management.printBooks(
+      searchType: "Category",
+      keyword: BookCategory.romance.name,
+      books: byCategory,
+    );
   } catch (e) {
     print(e);
   }
