@@ -124,11 +124,24 @@ class BorrowSystem {
   });
 }
 
+class returnHistory {
+  DateTime returnDate;
+  Book book;
+  Member member;
+
+  returnHistory({
+    required this.returnDate,
+    required this.book,
+    required this.member,
+  });
+}
+
 // ======================= 🏛️ LIBRARY MANAGEMENT =======================
 class LibraryManagement {
   List<Book> _book = [];
   List<Member> _member = [];
   List<BorrowSystem> _borrow = [];
+  List<returnHistory> _return = [];
 
   // 📖 GET BOOK DATA
   Book getBookData(String id) {
@@ -234,61 +247,138 @@ class LibraryManagement {
     }
     // .name this is a special propertie in Dart enum, .name is used for show real variable name in enum when it called
   }
+
+  // ----------------- RETURN SECTION -------------------
+
+  void historyReturn({required String memberID}) {
+    if (_return.isEmpty) throw Exception("No return history");
+
+    var member = getMemberData(memberID);
+    var history = _return.where((r) => r.member.id == memberID).toList();
+
+    if (history.isEmpty)
+      throw Exception("${member.name} doesn't have return book history");
+
+    print("\nRETURN HISTORY by ${member.name}");
+    print("================================");
+    for (var item in history) {
+      print("- DATE   : ${item.returnDate}");
+      print("Title    : ${item.book.title}");
+      print("Category : ${item.book.category?.name}");
+      print("Release Date : ${item.book.releaseDate}");
+      print("Status       : ${item.book.status?.name}");
+      print("Type         : ${item.book.type?.name}");
+      print("------------------------------------");
+    }
+  }
+
+  BorrowSystem getBorrow({required String memberID}) {
+    return _borrow.firstWhere(
+      (b) => b.member.id == memberID,
+      orElse: () =>
+          throw Exception("Member with ID [$memberID] doesn't borrow any book"),
+    );
+  }
+
+  void returnBook({
+    required String memberID,
+    required String bookID,
+    required DateTime returnDate,
+  }) {
+    if (!_borrow.any((b) => b.member.id == memberID))
+      throw Exception("Member with ID ($memberID) doesn't have borrow history");
+
+    if (!_borrow.any((b) => b.book.id == bookID))
+      throw Exception("Book with ID ($memberID) doesn't have borrow history");
+
+    var member = getMemberData(memberID);
+    var book = getBookData(bookID);
+
+    if (!member.bookIDs.contains(bookID))
+      throw Exception("${member.name} doesn't have book borrowed");
+
+    var borrow = getBorrow(memberID: memberID);
+
+    book.status = BookStatus.available;
+    member.bookIDs.remove(bookID);
+
+    var returnRecord = returnHistory(
+      returnDate: returnDate,
+      book: book,
+      member: member,
+    );
+
+    _return.add(returnRecord);
+
+    _borrow.remove(borrow);
+    print("${member.name} no longer booked [${book.title}]");
+  }
 }
 
 void main() {
-  var management = LibraryManagement();
+  try {
+    var management = LibraryManagement();
 
-  var digitalBook1 = DigitalBook(
-    id: "B001",
-    title: "September",
-    author: "Angga",
-    releaseDate: DateTime(2019, 9, 23, 20, 00),
-    category: BookCategory.romance,
-    status: BookStatus.available,
-    type: BookType.digital,
-    format: "PDF",
-    fileSize: 200,
-    link: "https://example.com",
-  );
+    var digitalBook1 = DigitalBook(
+      id: "B001",
+      title: "September",
+      author: "Angga",
+      releaseDate: DateTime(2019, 9, 23, 20, 00),
+      category: BookCategory.romance,
+      status: BookStatus.available,
+      type: BookType.digital,
+      format: "PDF",
+      fileSize: 200,
+      link: "https://example.com",
+    );
 
-  var physiqueBook1 = PhysiqueBook(
-    id: "B002",
-    title: "Beautiful in White",
-    author: "Angga",
-    releaseDate: DateTime(2018, 11, 11, 20, 00),
-    category: BookCategory.romance,
-    status: BookStatus.available,
-    type: BookType.physique,
-    shelfLocation: "R1-0001",
-    seriesNumber: "2",
-  );
+    var physiqueBook1 = PhysiqueBook(
+      id: "B002",
+      title: "Beautiful in White",
+      author: "Angga",
+      releaseDate: DateTime(2018, 11, 11, 20, 00),
+      category: BookCategory.romance,
+      status: BookStatus.available,
+      type: BookType.physique,
+      shelfLocation: "R1-0001",
+      seriesNumber: "2",
+    );
 
-  management.addBook(digitalBook1);
-  management.addBook(physiqueBook1);
+    management.addBook(digitalBook1);
+    management.addBook(physiqueBook1);
 
-  var member1 = Member(
-    id: "M001",
-    name: "Wina",
-    email: "wina23@gmail.com",
-    major: "Medicine",
-    position: MemberPosition.student,
-    status: MemberStatus.active,
-  );
+    var member1 = Member(
+      id: "M001",
+      name: "Wina",
+      email: "wina23@gmail.com",
+      major: "Medicine",
+      position: MemberPosition.student,
+      status: MemberStatus.active,
+    );
 
-  management.addMember(member1);
+    management.addMember(member1);
 
-  management.borrowBook(
-    memberID: member1.id,
-    bookID: digitalBook1.id,
-    borrowDate: DateTime.now(),
-  );
+    management.borrowBook(
+      memberID: member1.id,
+      bookID: digitalBook1.id,
+      borrowDate: DateTime.now(),
+    );
 
-  management.borrowBook(
-    memberID: member1.id,
-    bookID: physiqueBook1.id,
-    borrowDate: DateTime.now(),
-  );
+    management.borrowBook(
+      memberID: member1.id,
+      bookID: physiqueBook1.id,
+      borrowDate: DateTime.now(),
+    );
 
-  management.checkBorrowHistory(member1.id);
+    management.returnBook(
+      memberID: member1.id,
+      bookID: digitalBook1.id,
+      returnDate: DateTime.now(),
+    );
+
+    management.checkBorrowHistory(member1.id);
+    management.historyReturn(memberID: member1.id);
+  } catch (e) {
+    print(e);
+  }
 }
