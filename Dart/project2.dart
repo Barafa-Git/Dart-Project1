@@ -143,6 +143,8 @@ class LibraryManagement {
   List<BorrowSystem> _borrow = [];
   List<returnHistory> _return = [];
 
+  // ------------- ADDED DATA SECTION ------------------
+
   // 📖 GET BOOK DATA
   Book getBookData(String id) {
     return _book.firstWhere(
@@ -175,6 +177,81 @@ class LibraryManagement {
     }
     _member.add(member);
     print("👤 Member '${member.name}' added");
+  }
+
+  // ----------------- SEARCH SECTION -------------------
+  void checkBookbyTitle({required String bookTitle}) {
+    if (_book.isEmpty) throw Exception("Book data is empty");
+
+    var book = _book.where(
+      (b) => b.title.toLowerCase().contains(bookTitle.toLowerCase()),
+    );
+
+    if (book.isEmpty) throw Exception("Book with title $bookTitle not found");
+
+    print("\nSearch Result Book [$bookTitle]");
+    print("==========================================");
+    for (var item in book) {
+      print("Title    : ${item.title}");
+      print("Author   : ${item.author}");
+      print("Category : ${item.category?.name}");
+      print("Release Date : ${item.releaseDate}");
+      print("==========================================");
+    }
+  }
+
+  // ----------------- SEARCH SECTION -------------------
+
+  // ---------------- SEARCH FUNCTIONS ----------------
+  List<Book> getBookByTitle(String title) {
+    return _book
+        .where((b) => b.title.toLowerCase().contains(title.toLowerCase()))
+        .toList();
+  }
+
+  List<Book> getBookByAuthor(String author) {
+    return _book
+        .where((b) => b.author.toLowerCase().contains(author.toLowerCase()))
+        .toList();
+  }
+
+  List<Book> getBookByCategory(String category) {
+    try {
+      var categoryEnum = BookCategory.values.firstWhere(
+        (c) => c.name.toLowerCase() == category.toLowerCase(),
+      );
+      return _book.where((b) => b.category == categoryEnum).toList();
+    } catch (e) {
+      return []; // kalau kategori tidak ditemukan
+    }
+  }
+
+  // ---------------- OUTPUT FUNCTION ----------------
+  void printBooks(String searchType, String keyword, List<Book> books) {
+    if (books.isEmpty) {
+      print("⚠️ No book found for $searchType [$keyword]");
+      return;
+    }
+
+    print("\n🔍 Search Result ($searchType = '$keyword')");
+    print("==========================================");
+    for (var item in books) {
+      print("📘 Title       : ${item.title}");
+      print("✍️  Author      : ${item.author}");
+      print("🏷️  Category    : ${item.category?.name}");
+      print("📅 Release Date: ${item.releaseDate}");
+      print("------------------------------------------");
+    }
+  }
+
+  // ----------------- BORROW SECTION ---------------------
+
+  BorrowSystem getBorrow({required String memberID}) {
+    return _borrow.firstWhere(
+      (b) => b.member.id == memberID,
+      orElse: () =>
+          throw Exception("Member with ID [$memberID] doesn't borrow any book"),
+    );
   }
 
   // 🔑 BORROW BOOK
@@ -272,14 +349,6 @@ class LibraryManagement {
     }
   }
 
-  BorrowSystem getBorrow({required String memberID}) {
-    return _borrow.firstWhere(
-      (b) => b.member.id == memberID,
-      orElse: () =>
-          throw Exception("Member with ID [$memberID] doesn't borrow any book"),
-    );
-  }
-
   void returnBook({
     required String memberID,
     required String bookID,
@@ -344,8 +413,21 @@ void main() {
       seriesNumber: "2",
     );
 
+    var physiqueBook2 = PhysiqueBook(
+      id: "B003",
+      title: "As Beautiful as September",
+      author: "Angga",
+      releaseDate: DateTime(2018, 5, 11, 20, 00),
+      category: BookCategory.romance,
+      status: BookStatus.available,
+      type: BookType.physique,
+      shelfLocation: "R1-0001",
+      seriesNumber: "2",
+    );
+
     management.addBook(digitalBook1);
     management.addBook(physiqueBook1);
+    management.addBook(physiqueBook2);
 
     var member1 = Member(
       id: "M001",
@@ -378,6 +460,15 @@ void main() {
 
     management.checkBorrowHistory(member1.id);
     management.historyReturn(memberID: member1.id);
+
+    var byTitle = management.getBookByTitle("beautiful");
+    management.printBooks("Title", "beautiful", byTitle);
+
+    var byAuthor = management.getBookByAuthor("angga");
+    management.printBooks("Author", "angga", byAuthor);
+
+    var byCategory = management.getBookByCategory("science");
+    management.printBooks("Category", BookCategory.romance.name, byCategory);
   } catch (e) {
     print(e);
   }
