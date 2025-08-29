@@ -71,12 +71,12 @@ class PhysiqueBook extends Book {
   });
 }
 
-// ======================= 👤 MEMBER ENUM =======================
+// ========== MEMBER ENUM ==============
 enum MemberStatus { active, nonActive, suspended }
 
 enum MemberPosition { professors, student }
 
-// ======================= 👤 MEMBER CLASS =======================
+// ========== MEMBER CLASS =============
 class Member {
   final String id;
   final String name;
@@ -143,6 +143,7 @@ class LibraryManagement {
   List<Member> _member = [];
   List<BorrowSystem> _borrow = [];
   List<returnHistory> _return = [];
+  List<Reservation> _reservation = [];
 
   // ------------- ADDED DATA SECTION ------------------
 
@@ -287,7 +288,12 @@ class LibraryManagement {
     _borrow.add(newBorrowed);
     member.bookIDs.add(bookID);
 
-    if (book.type == BookType.physique) book.status = BookStatus.booked;
+    // if (book.type == BookType.physique) {
+    //   book.status = BookStatus.booked;
+    // } else if (book.type == BookType.digital)
+    //   book.status == BookStatus.available;
+
+    book.status == BookStatus.booked;
 
     print("📖 '${book.title}' borrowed by ${member.name}");
   }
@@ -299,20 +305,17 @@ class LibraryManagement {
     if (_borrow.isEmpty) throw Exception("⚠️ No borrow history");
 
     var member = getMemberData(memberID);
-    var books = _book.where((b) => member.bookIDs.contains(b.id)).toList();
+    var borrow = _borrow.where((b) => b.member.id == memberID).toList();
 
     print("\n📜 Borrowed History of ${member.name}");
     print("=====================================");
-    for (var item in books) {
-      print("📘 Title       : ${item.title}");
-      print("✍️  Author      : ${item.author}");
-      print("🏷️  Category    : ${item.category?.name}");
-      print("📅 Release Date: ${item.releaseDate}");
-      print("📊 Status      : ${item.status?.name}");
-      print("📂 Type        : ${item.type?.name}");
+    for (var item in borrow) {
+      print("📘 Borrow Date : ${item.borrowDate}");
+      print("📘 Title       : ${item.book.title}");
+      print("🏷️  Category    : ${item.book.category?.name}");
+      print("📂 Type        : ${item.book.type?.name}");
       print("-------------------------------------");
     }
-    // .name this is a special propertie in Dart enum, .name is used for show real variable name in enum when it called
   }
 
   // ----------------- RETURN SECTION -------------------
@@ -332,9 +335,6 @@ class LibraryManagement {
       print("- DATE   : ${item.returnDate}");
       print("Title    : ${item.book.title}");
       print("Category : ${item.book.category?.name}");
-      print("Release Date : ${item.book.releaseDate}");
-      print("Status       : ${item.book.status?.name}");
-      print("Type         : ${item.book.type?.name}");
       print("------------------------------------");
     }
   }
@@ -378,14 +378,98 @@ class LibraryManagement {
     _borrow.remove(borrow);
     print("${member.name} no longer booked [${book.title}]");
   }
+
+  void reservedBook({
+    required String memberID,
+    required String bookID,
+    required DateTime reservationDate,
+  }) {
+    if (_borrow.isEmpty) throw Exception("No book borrowed");
+
+    var member = getMemberData(memberID);
+    var book = getBookData(bookID);
+
+    var borrow = getBorrow(memberID: memberID);
+
+    if (member.bookIDs.isEmpty)
+      throw Exception("${member.name} not borrow any books");
+
+    if (book.status == BookStatus.available ||
+        book.status == BookStatus.reference)
+      throw Exception("Book [${book.title}] can't be reserved");
+
+    if (reservationDate.isBefore(borrow.borrowDate))
+      throw Exception("Can't reserve a book before its borrow date");
+
+    var reservation = Reservation(
+      member: member,
+      book: book,
+      reservationDate: reservationDate,
+    );
+
+    _reservation.add(reservation);
+    print("Reservation Added");
+  }
+
+  void reservationHistory() {
+    if (_reservation.isEmpty) throw Exception("No reservation added");
+
+    print("\nRESERVATION HISTORY");
+    print('============================');
+    for (var item in _reservation) {
+      print("Reserved Name  : ${item.member.name}");
+      print("Reserved Book  : ${item.book.title}");
+      print("Reservation Date : ${item.reservationDate}");
+      print('============================');
+    }
+  }
+}
+
+class Reservation {
+  Member member;
+  Book book;
+  DateTime reservationDate;
+
+  Reservation({
+    required this.member,
+    required this.book,
+    required this.reservationDate,
+  });
 }
 
 void main() {
   try {
     var management = LibraryManagement();
 
-    var digitalBook1 = DigitalBook(
+    // ------------ Physical Book ---------------
+
+    var PBook1 = PhysiqueBook(
       id: "B001",
+      title: "Beautiful in White",
+      author: "Angga",
+      releaseDate: DateTime(2018, 11, 11, 20, 00),
+      category: BookCategory.romance,
+      status: BookStatus.available,
+      type: BookType.physique,
+      shelfLocation: "R1-0001",
+      seriesNumber: "2",
+    );
+
+    var PBook2 = PhysiqueBook(
+      id: "B002",
+      title: "The Darkness of Our Brain",
+      author: "Jenny",
+      releaseDate: DateTime(2006, 10, 30),
+      category: BookCategory.psychology,
+      status: BookStatus.available,
+      type: BookType.physique,
+      shelfLocation: "E1-001",
+      seriesNumber: "1",
+    );
+
+    // -------- DIGITAL BOOK -------------
+    var DBook1 = DigitalBook(
+      id: "B003",
       title: "September",
       author: "Angga",
       releaseDate: DateTime(2019, 9, 23, 20, 00),
@@ -397,33 +481,26 @@ void main() {
       link: "https://example.com",
     );
 
-    var physiqueBook1 = PhysiqueBook(
-      id: "B002",
-      title: "Beautiful in White",
+    var DBook2 = DigitalBook(
+      id: "B004",
+      title: "Earthquake Technology",
       author: "Angga",
-      releaseDate: DateTime(2018, 11, 11, 20, 00),
-      category: BookCategory.romance,
+      releaseDate: DateTime(2019, 9, 23, 20, 00),
+      category: BookCategory.technology,
       status: BookStatus.available,
-      type: BookType.physique,
-      shelfLocation: "R1-0001",
-      seriesNumber: "2",
+      type: BookType.digital,
+      format: "PDF",
+      fileSize: 200,
+      link: "https://example.com",
     );
 
-    var physiqueBook2 = PhysiqueBook(
-      id: "B003",
-      title: "As Beautiful as September",
-      author: "Angga",
-      releaseDate: DateTime(2018, 5, 11, 20, 00),
-      category: BookCategory.romance,
-      status: BookStatus.available,
-      type: BookType.physique,
-      shelfLocation: "R1-0001",
-      seriesNumber: "2",
-    );
+    // ------------ ADD BOOK -----------
+    management.addBook(PBook1);
+    management.addBook(PBook2);
+    management.addBook(DBook1);
+    management.addBook(DBook2);
 
-    management.addBook(digitalBook1);
-    management.addBook(physiqueBook1);
-    management.addBook(physiqueBook2);
+    // ----------- MEMBER -------------
 
     var member1 = Member(
       id: "M001",
@@ -434,28 +511,60 @@ void main() {
       status: MemberStatus.active,
     );
 
+    var member2 = Member(
+      id: "M002",
+      name: "Anne",
+      email: "Anne23@gmail.com",
+      major: "Economyc",
+      position: MemberPosition.student,
+      status: MemberStatus.active,
+    );
+
+    // ------------- ADD MEMBER --------------
+
     management.addMember(member1);
+    management.addMember(member2);
 
+    // ------------- ADD BORROW ----------------
     management.borrowBook(
       memberID: member1.id,
-      bookID: digitalBook1.id,
+      bookID: PBook1.id,
       borrowDate: DateTime.now(),
     );
 
     management.borrowBook(
       memberID: member1.id,
-      bookID: physiqueBook1.id,
+      bookID: PBook2.id,
       borrowDate: DateTime.now(),
     );
 
+    management.borrowBook(
+      memberID: member2.id,
+      bookID: DBook1.id,
+      borrowDate: DateTime.now(),
+    );
+
+    management.borrowBook(
+      memberID: member2.id,
+      bookID: DBook2.id,
+      borrowDate: DateTime.now(),
+    );
+
+    // ------- RETURN BOOK --------
     management.returnBook(
       memberID: member1.id,
-      bookID: digitalBook1.id,
+      bookID: PBook1.id,
       returnDate: DateTime.now(),
     );
 
+    // ---------- CHECKING BORROW HISTORY ---------------
+
     management.checkBorrowHistory(member1.id);
+
+    // --------- CHECKING RETURN HISTORY ----------------
     management.historyReturn(memberID: member1.id);
+
+    // --------- SEARCH SECTION ----------------
 
     var byTitle = management.getBookByTitle("beautiful");
     management.printBooks(
@@ -477,6 +586,15 @@ void main() {
       keyword: BookCategory.romance.name,
       books: byCategory,
     );
+
+    // ------------ RESERVATION SECTION -------------
+    management.reservedBook(
+      memberID: member1.id,
+      bookID: DBook1.id,
+      reservationDate: DateTime.now(),
+    );
+
+    management.reservationHistory();
   } catch (e) {
     print(e);
   }
