@@ -125,12 +125,12 @@ class BorrowSystem {
   });
 }
 
-class returnHistory {
+class ReturnHistory {
   DateTime returnDate;
   Book book;
   Member member;
 
-  returnHistory({
+  ReturnHistory({
     required this.returnDate,
     required this.book,
     required this.member,
@@ -142,10 +142,8 @@ class LibraryManagement {
   List<Book> _book = [];
   List<Member> _member = [];
   List<BorrowSystem> _borrow = [];
-  List<returnHistory> _return = [];
+  List<ReturnHistory> _return = [];
   List<Reservation> _reservation = [];
-
-  // ------------- ADDED DATA SECTION ------------------
 
   // 📖 GET BOOK DATA
   Book getBookData(String id) {
@@ -228,7 +226,6 @@ class LibraryManagement {
   }
 
   // ----------------- BORROW SECTION ---------------------
-
   BorrowSystem getBorrow({required String memberID}) {
     return _borrow.firstWhere(
       (b) => b.member.id == memberID,
@@ -237,7 +234,6 @@ class LibraryManagement {
     );
   }
 
-  // 🔑 BORROW BOOK
   void borrowBook({
     required String memberID,
     required String bookID,
@@ -288,12 +284,7 @@ class LibraryManagement {
     _borrow.add(newBorrowed);
     member.bookIDs.add(bookID);
 
-    // if (book.type == BookType.physique) {
-    //   book.status = BookStatus.booked;
-    // } else if (book.type == BookType.digital)
-    //   book.status == BookStatus.available;
-
-    book.status == BookStatus.booked;
+    book.status = BookStatus.booked; // ✅ FIX: pakai assignment
 
     print("📖 '${book.title}' borrowed by ${member.name}");
   }
@@ -319,7 +310,6 @@ class LibraryManagement {
   }
 
   // ----------------- RETURN SECTION -------------------
-
   void historyReturn({required String memberID}) {
     if (_return.isEmpty) throw Exception("No return history");
 
@@ -358,48 +348,47 @@ class LibraryManagement {
     if (!member.bookIDs.contains(bookID))
       throw Exception("${member.name} doesn't have book borrowed");
 
-    if (borrow.borrowDate.day > returnDate.day)
+    if (borrow.borrowDate.isAfter(returnDate))
       throw Exception("Return date should be after borrow date");
 
-    int totalDay = borrow.borrowDate.day - returnDate.day;
+    int totalDay = returnDate.difference(borrow.borrowDate).inDays;
 
     member.addPenalty(totalDays: totalDay);
     book.status = BookStatus.available;
     member.bookIDs.remove(bookID);
 
-    var returnRecord = returnHistory(
+    var returnRecord = ReturnHistory(
       returnDate: returnDate,
       book: book,
       member: member,
     );
 
     _return.add(returnRecord);
-
     _borrow.remove(borrow);
+
     print("${member.name} no longer booked [${book.title}]");
   }
 
+  // ----------------- RESERVATION SECTION -------------------
   void reservedBook({
     required String memberID,
     required String bookID,
     required DateTime reservationDate,
   }) {
-    if (_borrow.isEmpty) throw Exception("No book borrowed");
-
     var member = getMemberData(memberID);
     var book = getBookData(bookID);
 
-    var borrow = getBorrow(memberID: memberID);
+    // hanya bisa reservasi kalau buku sedang dipinjam (booked)
+    if (book.status != BookStatus.booked) {
+      throw Exception("Book [${book.title}] can't be reserved (not booked)");
+    }
 
-    if (member.bookIDs.isEmpty)
-      throw Exception("${member.name} not borrow any books");
-
-    if (book.status == BookStatus.available ||
-        book.status == BookStatus.reference)
-      throw Exception("Book [${book.title}] can't be reserved");
-
-    if (reservationDate.isBefore(borrow.borrowDate))
-      throw Exception("Can't reserve a book before its borrow date");
+    // pastikan tidak ada reservasi ganda
+    if (_reservation.any(
+      (r) => r.member.id == memberID && r.book.id == bookID,
+    )) {
+      throw Exception("${member.name} already reserved this book");
+    }
 
     var reservation = Reservation(
       member: member,
@@ -408,7 +397,7 @@ class LibraryManagement {
     );
 
     _reservation.add(reservation);
-    print("Reservation Added");
+    print("✅ Reservation Added for ${member.name} on '${book.title}'");
   }
 
   void reservationHistory() {
@@ -417,8 +406,8 @@ class LibraryManagement {
     print("\nRESERVATION HISTORY");
     print('============================');
     for (var item in _reservation) {
-      print("Reserved Name  : ${item.member.name}");
-      print("Reserved Book  : ${item.book.title}");
+      print("Reserved Name    : ${item.member.name}");
+      print("Reserved Book    : ${item.book.title}");
       print("Reservation Date : ${item.reservationDate}");
       print('============================');
     }
@@ -442,7 +431,6 @@ void main() {
     var management = LibraryManagement();
 
     // ------------ Physical Book ---------------
-
     var PBook1 = PhysiqueBook(
       id: "B001",
       title: "Beautiful in White",
@@ -501,7 +489,6 @@ void main() {
     management.addBook(DBook2);
 
     // ----------- MEMBER -------------
-
     var member1 = Member(
       id: "M001",
       name: "Wina",
@@ -521,7 +508,6 @@ void main() {
     );
 
     // ------------- ADD MEMBER --------------
-
     management.addMember(member1);
     management.addMember(member2);
 
@@ -533,61 +519,12 @@ void main() {
     );
 
     management.borrowBook(
-      memberID: member1.id,
-      bookID: PBook2.id,
-      borrowDate: DateTime.now(),
-    );
-
-    management.borrowBook(
       memberID: member2.id,
       bookID: DBook1.id,
       borrowDate: DateTime.now(),
     );
 
-    management.borrowBook(
-      memberID: member2.id,
-      bookID: DBook2.id,
-      borrowDate: DateTime.now(),
-    );
-
-    // ------- RETURN BOOK --------
-    management.returnBook(
-      memberID: member1.id,
-      bookID: PBook1.id,
-      returnDate: DateTime.now(),
-    );
-
-    // ---------- CHECKING BORROW HISTORY ---------------
-
-    management.checkBorrowHistory(member1.id);
-
-    // --------- CHECKING RETURN HISTORY ----------------
-    management.historyReturn(memberID: member1.id);
-
-    // --------- SEARCH SECTION ----------------
-
-    var byTitle = management.getBookByTitle("beautiful");
-    management.printBooks(
-      searchType: "Title",
-      keyword: "beautiful",
-      books: byTitle,
-    );
-
-    var byAuthor = management.getBookByAuthor("angga");
-    management.printBooks(
-      searchType: "Author",
-      keyword: "angga",
-      books: byAuthor,
-    );
-
-    var byCategory = management.getBookByCategory(BookCategory.romance.name);
-    management.printBooks(
-      searchType: "Category",
-      keyword: BookCategory.romance.name,
-      books: byCategory,
-    );
-
-    // ------------ RESERVATION SECTION -------------
+    // ------- RESERVE BOOK --------
     management.reservedBook(
       memberID: member1.id,
       bookID: DBook1.id,
