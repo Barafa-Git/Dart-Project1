@@ -1,8 +1,3 @@
-// ======================================================
-// 📚 LIBRARY MANAGEMENT SYSTEM
-// ======================================================
-
-// ======================= 📖 BOOK ENUM =======================
 enum BookCategory {
   science,
   technology,
@@ -13,7 +8,7 @@ enum BookCategory {
   romance,
 }
 
-enum BookStatus { available, booked, ordered }
+enum BookStatus { available, booked, reference }
 
 enum BookType { physique, digital }
 
@@ -90,6 +85,7 @@ class Member {
   MemberPosition position;
   MemberStatus status;
   int totalDay;
+  double penalty;
   List<String> bookIDs = [];
 
   Member({
@@ -98,6 +94,7 @@ class Member {
     required this.email,
     required this.major,
     required this.position,
+    this.penalty = 0,
     required this.status,
     this.totalDay = 0,
   }) : assert(email.contains("@gmail.com"), "Email must contain @gmail.com");
@@ -108,6 +105,10 @@ class Member {
     }
     bookIDs.add(id);
     print("✅ Book added to borrowed history");
+  }
+
+  void addPenalty({required totalDays}) {
+    penalty += totalDays * 2000;
   }
 }
 
@@ -244,6 +245,9 @@ class LibraryManagement {
     var member = getMemberData(memberID);
     var book = getBookData(bookID);
 
+    if (member.penalty > 20000)
+      throw Exception("Member with more than 20.000 penalty can't borrow book");
+
     if (member.bookIDs.contains(book.id)) {
       throw Exception("⚠️ ${member.name} already borrowed ${book.title}");
     }
@@ -251,6 +255,11 @@ class LibraryManagement {
     if (member.status == MemberStatus.suspended) {
       throw Exception("⛔ Suspended member can't borrow books");
     }
+
+    if (book.status == BookStatus.reference)
+      throw Exception("Book with reference status can't borrowed");
+
+    if (book.status == BookStatus.booked) throw Exception("Book is booked");
 
     int borrowWithinPeriod = _borrow
         .where(
@@ -275,10 +284,10 @@ class LibraryManagement {
       book: book,
       member: member,
     );
-
     _borrow.add(newBorrowed);
     member.bookIDs.add(bookID);
-    book.status = BookStatus.booked;
+
+    if (book.type == BookType.physique) book.status = BookStatus.booked;
 
     print("📖 '${book.title}' borrowed by ${member.name}");
   }
@@ -335,6 +344,8 @@ class LibraryManagement {
     required String bookID,
     required DateTime returnDate,
   }) {
+    var borrow = getBorrow(memberID: memberID);
+
     if (!_borrow.any((b) => b.member.id == memberID))
       throw Exception("Member with ID ($memberID) doesn't have borrow history");
 
@@ -347,8 +358,12 @@ class LibraryManagement {
     if (!member.bookIDs.contains(bookID))
       throw Exception("${member.name} doesn't have book borrowed");
 
-    var borrow = getBorrow(memberID: memberID);
+    if (borrow.borrowDate.day > returnDate.day)
+      throw Exception("Return date should be after borrow date");
 
+    int totalDay = borrow.borrowDate.day - returnDate.day;
+
+    member.addPenalty(totalDays: totalDay);
     book.status = BookStatus.available;
     member.bookIDs.remove(bookID);
 
@@ -456,7 +471,7 @@ void main() {
       books: byAuthor,
     );
 
-    var byCategory = management.getBookByCategory("science");
+    var byCategory = management.getBookByCategory(BookCategory.romance.name);
     management.printBooks(
       searchType: "Category",
       keyword: BookCategory.romance.name,
