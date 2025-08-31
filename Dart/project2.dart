@@ -17,10 +17,10 @@ class Book {
   final String id;
   final String title;
   final String author;
-  DateTime releaseDate;
-  BookCategory? category;
-  BookStatus? status;
-  BookType? type;
+  final DateTime releaseDate;
+  final BookCategory category;
+  BookStatus status;
+  final BookType type;
 
   Book({
     required this.id,
@@ -74,7 +74,7 @@ class PhysiqueBook extends Book {
 // ========== MEMBER ENUM ==============
 enum MemberStatus { active, nonActive, suspended }
 
-enum MemberPosition { professors, student }
+enum MemberPosition { professor, student }
 
 // ========== MEMBER CLASS =============
 class Member {
@@ -82,11 +82,11 @@ class Member {
   final String name;
   final String email;
   final String major;
-  MemberPosition position;
+  final MemberPosition position;
   MemberStatus status;
-  int totalDay;
   double penalty;
-  List<String> bookIDs = [];
+  final List<String> _borrowedBookIDs = [];
+  final Map<String, DateTime> _borrowDates = {};
 
   Member({
     required this.id,
@@ -96,346 +96,414 @@ class Member {
     required this.position,
     this.penalty = 0,
     required this.status,
-    this.totalDay = 0,
-  }) : assert(email.contains("@gmail.com"), "Email must contain @gmail.com");
+  }) : assert(email.contains("@"), "Email must contain @");
 
-  void addBook(String id) {
-    if (bookIDs.contains(id)) {
-      throw Exception("⚠️ Member already borrowed book with ID ($id)");
+  List<String> get borrowedBookIDs => List.unmodifiable(_borrowedBookIDs);
+
+  int get maxBorrowLimit => position == MemberPosition.student ? 5 : 10;
+
+  int get borrowDuration => position == MemberPosition.student ? 14 : 30;
+
+  void borrowBook(String bookId, DateTime borrowDate) {
+    if (_borrowedBookIDs.contains(bookId)) {
+      throw Exception("⚠ Member already borrowed book with ID ($bookId)");
     }
-    bookIDs.add(id);
-    print("✅ Book added to borrowed history");
+
+    if (_borrowedBookIDs.length >= maxBorrowLimit) {
+      throw Exception(
+        "⚠ Member has reached maximum borrow limit of $maxBorrowLimit books",
+      );
+    }
+
+    _borrowedBookIDs.add(bookId);
+    _borrowDates[bookId] = borrowDate;
   }
 
-  void addPenalty({required totalDays}) {
-    penalty += totalDays * 2000;
+  void returnBook(String bookId) {
+    if (!_borrowedBookIDs.contains(bookId)) {
+      throw Exception("⚠ Member hasn't borrowed book with ID ($bookId)");
+    }
+
+    _borrowedBookIDs.remove(bookId);
+    _borrowDates.remove(bookId);
   }
+
+  void addPenalty(double amount) {
+    penalty += amount;
+  }
+
+  bool get canBorrow => status == MemberStatus.active && penalty <= 20000;
+
+  DateTime? getBorrowDate(String bookId) => _borrowDates[bookId];
 }
 
 // ======================= 📦 BORROW SYSTEM =======================
-class BorrowSystem {
-  DateTime borrowDate;
-  Book book;
-  Member member;
+class BorrowRecord {
+  final String id;
+  final DateTime borrowDate;
+  final DateTime dueDate;
+  final Book book;
+  final Member member;
+  DateTime? returnDate;
+  double? penalty;
 
-  BorrowSystem({
+  BorrowRecord({
+    required this.id,
     required this.borrowDate,
+    required this.dueDate,
     required this.book,
     required this.member,
   });
 }
 
-class ReturnHistory {
-  DateTime returnDate;
-  Book book;
-  Member member;
+class Reservation {
+  final String id;
+  final Member member;
+  final Book book;
+  final DateTime reservationDate;
+  DateTime? fulfillmentDate;
 
-  ReturnHistory({
-    required this.returnDate,
-    required this.book,
+  Reservation({
+    required this.id,
     required this.member,
+    required this.book,
+    required this.reservationDate,
+    this.fulfillmentDate,
   });
 }
 
-// ======================= 🏛️ LIBRARY MANAGEMENT =======================
+// ======================= 🏛 LIBRARY MANAGEMENT =======================
 class LibraryManagement {
-  List<Book> _book = [];
-  List<Member> _member = [];
-  List<BorrowSystem> _borrow = [];
-  List<ReturnHistory> _return = [];
-  List<Reservation> _reservation = [];
+  final List<Book> _books = [];
+  final List<Member> _members = [];
+  final List<BorrowRecord> _borrowRecords = [];
+  final List<Reservation> _reservations = [];
+  final Map<String, List<Reservation>> _bookReservations = {};
 
   // 📖 GET BOOK DATA
-  Book getBookData(String id) {
-    return _book.firstWhere(
+  Book getBook(String id) {
+    return _books.firstWhere(
       (b) => b.id == id,
-      orElse: () => throw Exception("⚠️ Book not found"),
+      orElse: () => throw Exception("⚠ Book with ID $id not found"),
     );
   }
 
   // 👤 GET MEMBER DATA
-  Member getMemberData(String id) {
-    return _member.firstWhere(
+  Member getMember(String id) {
+    return _members.firstWhere(
       (m) => m.id == id,
-      orElse: () => throw Exception("⚠️ Member not found"),
+      orElse: () => throw Exception("⚠ Member with ID $id not found"),
     );
   }
 
   // ➕ ADD BOOK
   void addBook(Book book) {
-    if (_book.any((b) => b.id == book.id)) {
-      throw Exception("⚠️ Book with ID (${book.id}) already exists");
+    if (_books.any((b) => b.id == book.id)) {
+      throw Exception("⚠ Book with ID ${book.id} already exists");
     }
-    _book.add(book);
+    _books.add(book);
     print("📚 Book '${book.title}' added");
   }
 
   // ➕ ADD MEMBER
   void addMember(Member member) {
-    if (_member.any((m) => m.id == member.id)) {
-      throw Exception("⚠️ Member with ID (${member.id}) already exists");
+    if (_members.any((m) => m.id == member.id)) {
+      throw Exception("⚠ Member with ID ${member.id} already exists");
     }
-    _member.add(member);
+    _members.add(member);
     print("👤 Member '${member.name}' added");
   }
 
   // ---------------- SEARCH FUNCTIONS ----------------
-  List<Book> getBookByTitle(String title) {
-    return _book
-        .where((b) => b.title.toLowerCase().contains(title.toLowerCase()))
+  List<Book> searchByTitle(String title) {
+    final keyword = title.toLowerCase();
+    return _books
+        .where((b) => b.title.toLowerCase().contains(keyword))
         .toList();
   }
 
-  List<Book> getBookByAuthor(String author) {
-    return _book
-        .where((b) => b.author.toLowerCase().contains(author.toLowerCase()))
+  List<Book> searchByAuthor(String author) {
+    final keyword = author.toLowerCase();
+    return _books
+        .where((b) => b.author.toLowerCase().contains(keyword))
         .toList();
   }
 
-  List<Book> getBookByCategory(String category) {
-    try {
-      var categoryEnum = BookCategory.values.firstWhere(
-        (c) => c.name.toLowerCase() == category.toLowerCase(),
-      );
-      return _book.where((b) => b.category == categoryEnum).toList();
-    } catch (e) {
-      return []; // kalau kategori tidak ditemukan
-    }
+  List<Book> searchByCategory(BookCategory category) {
+    return _books.where((b) => b.category == category).toList();
   }
 
   // ---------------- OUTPUT FUNCTION ----------------
-  void printBooks({
-    required String searchType,
-    required String keyword,
-    required List<Book> books,
+  void printBooks(
+    List<Book> books, {
+    String searchType = "",
+    String keyword = "",
   }) {
     if (books.isEmpty) {
-      print("⚠️ No book found for $searchType [$keyword]");
+      print(
+        "⚠ No books found${searchType.isNotEmpty ? " for $searchType" : ""}${keyword.isNotEmpty ? " '$keyword'" : ""}",
+      );
       return;
     }
 
-    print("\n🔍 Search Result ($searchType = '$keyword')");
-    print("==========================================");
-    for (var item in books) {
-      print("📘 Title       : ${item.title}");
-      print("✍️  Author      : ${item.author}");
-      print("🏷️  Category    : ${item.category?.name}");
-      print("📅 Release Date: ${item.releaseDate}");
-      print("------------------------------------------");
+    print(
+      "\n🔍 Search Results${searchType.isNotEmpty ? " ($searchType" : ""}${keyword.isNotEmpty ? " '$keyword')" : ""}",
+    );
+    print("=" * 50);
+    for (var book in books) {
+      print("📘 Title       : ${book.title}");
+      print("✍  Author      : ${book.author}");
+      print("🏷  Category    : ${book.category.name}");
+      print("📅 Release Date: ${book.releaseDate}");
+      print("📋 Status      : ${book.status.name}");
+      print("📂 Type        : ${book.type.name}");
+      print("-" * 50);
     }
   }
 
   // ----------------- BORROW SECTION ---------------------
-  BorrowSystem getBorrow({required String memberID}) {
-    return _borrow.firstWhere(
-      (b) => b.member.id == memberID,
-      orElse: () =>
-          throw Exception("Member with ID [$memberID] doesn't borrow any book"),
-    );
-  }
-
   void borrowBook({
-    required String memberID,
-    required String bookID,
+    required String memberId,
+    required String bookId,
     required DateTime borrowDate,
   }) {
-    var member = getMemberData(memberID);
-    var book = getBookData(bookID);
+    final member = getMember(memberId);
+    final book = getBook(bookId);
 
-    if (member.penalty > 20000)
-      throw Exception("Member with more than 20.000 penalty can't borrow book");
-
-    if (member.bookIDs.contains(book.id)) {
-      throw Exception("⚠️ ${member.name} already borrowed ${book.title}");
+    // Validasi member
+    if (!member.canBorrow) {
+      throw Exception(
+        "⛔ Member cannot borrow books. Status: ${member.status}, Penalty: ${member.penalty}",
+      );
     }
 
-    if (member.status == MemberStatus.suspended) {
-      throw Exception("⛔ Suspended member can't borrow books");
+    // Validasi buku
+    if (book.status != BookStatus.available) {
+      throw Exception("⚠ Book '${book.title}' is not available for borrowing");
     }
 
-    if (book.status == BookStatus.reference)
-      throw Exception("Book with reference status can't borrowed");
-
-    if (book.status == BookStatus.booked) throw Exception("Book is booked");
-
-    int borrowWithinPeriod = _borrow
-        .where(
-          (b) =>
-              b.member == member &&
-              borrowDate.difference(b.borrowDate).inDays.abs() <=
-                  (member.position == MemberPosition.student ? 14 : 30),
-        )
-        .length;
-
-    if (member.position == MemberPosition.student && borrowWithinPeriod >= 5) {
-      throw Exception("⚠️ Students can borrow max 5 books within 14 days");
+    if (book.status == BookStatus.reference) {
+      throw Exception("⚠ Reference books cannot be borrowed");
     }
 
-    if (member.position == MemberPosition.professors &&
-        borrowWithinPeriod >= 10) {
-      throw Exception("⚠️ Professors can borrow max 10 books within 30 days");
-    }
+    // Hitung due date
+    final dueDate = borrowDate.add(Duration(days: member.borrowDuration));
 
-    var newBorrowed = BorrowSystem(
+    // Buat record peminjaman
+    final borrowRecord = BorrowRecord(
+      id: "BOR-${_borrowRecords.length + 1}",
       borrowDate: borrowDate,
+      dueDate: dueDate,
       book: book,
       member: member,
     );
-    _borrow.add(newBorrowed);
-    member.bookIDs.add(bookID);
 
-    book.status = BookStatus.booked; // ✅ FIX: pakai assignment
+    // Update status
+    book.status = BookStatus.booked;
+    member.borrowBook(bookId, borrowDate);
+    _borrowRecords.add(borrowRecord);
 
-    print("📖 '${book.title}' borrowed by ${member.name}");
+    print("📖 '${book.title}' borrowed by ${member.name}. Due date: $dueDate");
   }
 
   // 📜 CHECK BORROW HISTORY
-  void checkBorrowHistory(String memberID) {
-    if (_member.isEmpty) throw Exception("⚠️ No member added");
-    if (_book.isEmpty) throw Exception("⚠️ No book added");
-    if (_borrow.isEmpty) throw Exception("⚠️ No borrow history");
+  void printBorrowHistory(String memberId) {
+    final member = getMember(memberId);
+    final records = _borrowRecords
+        .where((r) => r.member.id == memberId)
+        .toList();
 
-    var member = getMemberData(memberID);
-    var borrow = _borrow.where((b) => b.member.id == memberID).toList();
+    if (records.isEmpty) {
+      print("⚠ No borrow history found for ${member.name}");
+      return;
+    }
 
-    print("\n📜 Borrowed History of ${member.name}");
-    print("=====================================");
-    for (var item in borrow) {
-      print("📘 Borrow Date : ${item.borrowDate}");
-      print("📘 Title       : ${item.book.title}");
-      print("🏷️  Category    : ${item.book.category?.name}");
-      print("📂 Type        : ${item.book.type?.name}");
-      print("-------------------------------------");
+    print("\n📜 Borrow History for ${member.name}");
+    print("=" * 50);
+    for (var record in records) {
+      final returned = record.returnDate != null;
+      final status = returned ? "Returned" : "Borrowed";
+      final returnInfo = returned
+          ? "Returned: ${record.returnDate}"
+          : "Due: ${record.dueDate}";
+
+      print("📘 ${record.book.title} - $status");
+      print("   Borrowed: ${record.borrowDate}");
+      print("   $returnInfo");
+      if (record.penalty != null && record.penalty! > 0) {
+        print("   Penalty: Rp${record.penalty}");
+      }
+      print("-" * 30);
     }
   }
 
   // ----------------- RETURN SECTION -------------------
-  void historyReturn({required String memberID}) {
-    if (_return.isEmpty) throw Exception("No return history");
-
-    var member = getMemberData(memberID);
-    var history = _return.where((r) => r.member.id == memberID).toList();
-
-    if (history.isEmpty)
-      throw Exception("${member.name} doesn't have return book history");
-
-    print("\nRETURN HISTORY by ${member.name}");
-    print("================================");
-    for (var item in history) {
-      print("- DATE   : ${item.returnDate}");
-      print("Title    : ${item.book.title}");
-      print("Category : ${item.book.category?.name}");
-      print("------------------------------------");
-    }
-  }
-
   void returnBook({
-    required String memberID,
-    required String bookID,
+    required String memberId,
+    required String bookId,
     required DateTime returnDate,
   }) {
-    var borrow = getBorrow(memberID: memberID);
+    final member = getMember(memberId);
+    final book = getBook(bookId);
 
-    if (!_borrow.any((b) => b.member.id == memberID))
-      throw Exception("Member with ID ($memberID) doesn't have borrow history");
+    // Cek apakah member meminjam buku ini
+    if (!member.borrowedBookIDs.contains(bookId)) {
+      throw Exception("⚠ ${member.name} hasn't borrowed '${book.title}'");
+    }
 
-    if (!_borrow.any((b) => b.book.id == bookID))
-      throw Exception("Book with ID ($memberID) doesn't have borrow history");
-
-    var member = getMemberData(memberID);
-    var book = getBookData(bookID);
-
-    if (!member.bookIDs.contains(bookID))
-      throw Exception("${member.name} doesn't have book borrowed");
-
-    if (borrow.borrowDate.isAfter(returnDate))
-      throw Exception("Return date should be after borrow date");
-
-    int totalDay = returnDate.difference(borrow.borrowDate).inDays;
-
-    member.addPenalty(totalDays: totalDay);
-    book.status = BookStatus.available;
-    member.bookIDs.remove(bookID);
-
-    var returnRecord = ReturnHistory(
-      returnDate: returnDate,
-      book: book,
-      member: member,
+    // Cari record peminjaman yang aktif
+    final borrowRecord = _borrowRecords.firstWhere(
+      (r) =>
+          r.member.id == memberId &&
+          r.book.id == bookId &&
+          r.returnDate == null,
+      orElse: () => throw Exception("⚠ No active borrow record found"),
     );
 
-    _return.add(returnRecord);
-    _borrow.remove(borrow);
+    // Hitung denda jika terlambat
+    double penalty = 0;
+    if (returnDate.isAfter(borrowRecord.dueDate)) {
+      final lateDays = returnDate.difference(borrowRecord.dueDate).inDays;
+      penalty = lateDays * 2000;
 
-    print("${member.name} no longer booked [${book.title}]");
+      if (penalty > 0) {
+        member.addPenalty(penalty);
+        borrowRecord.penalty = penalty;
+        print("⚠ Late return penalty: Rp$penalty");
+      }
+    }
+
+    // Update record dan status
+    borrowRecord.returnDate = returnDate;
+    book.status = BookStatus.available;
+    member.returnBook(bookId);
+
+    // Cek jika ada reservasi untuk buku ini
+    _fulfillReservations(book);
+
+    print("✅ '${book.title}' returned by ${member.name}");
   }
 
   // ----------------- RESERVATION SECTION -------------------
-  void reservedBook({
-    required String memberID,
-    required String bookID,
+  void reserveBook({
+    required String memberId,
+    required String bookId,
     required DateTime reservationDate,
   }) {
-    var member = getMemberData(memberID);
-    var book = getBookData(bookID);
+    final member = getMember(memberId);
+    final book = getBook(bookId);
 
-    // hanya bisa reservasi kalau buku sedang dipinjam (booked)
+    // Validasi buku harus dipinjam
     if (book.status != BookStatus.booked) {
-      throw Exception("Book [${book.title}] can't be reserved (not booked)");
+      throw Exception(
+        "⚠ Book '${book.title}' is available for immediate borrowing",
+      );
     }
 
-    // pastikan tidak ada reservasi ganda
-    if (_reservation.any(
-      (r) => r.member.id == memberID && r.book.id == bookID,
+    // Cek apakah member sudah mereservasi buku ini
+    if (_reservations.any(
+      (r) =>
+          r.member.id == memberId &&
+          r.book.id == bookId &&
+          r.fulfillmentDate == null,
     )) {
-      throw Exception("${member.name} already reserved this book");
+      throw Exception(
+        "⚠ ${member.name} already has an active reservation for '${book.title}'",
+      );
     }
 
-    var reservation = Reservation(
+    // Buat reservasi
+    final reservation = Reservation(
+      id: "RES-${_reservations.length + 1}",
       member: member,
       book: book,
       reservationDate: reservationDate,
     );
 
-    _reservation.add(reservation);
-    print("✅ Reservation Added for ${member.name} on '${book.title}'");
+    _reservations.add(reservation);
+
+    // Tambahkan ke antrian reservasi buku
+    if (!_bookReservations.containsKey(bookId)) {
+      _bookReservations[bookId] = [];
+    }
+    _bookReservations[bookId]!.add(reservation);
+
+    print("✅ Reservation added for ${member.name} on '${book.title}'");
   }
 
-  void reservationHistory() {
-    if (_reservation.isEmpty) throw Exception("No reservation added");
+  // Helper method untuk memenuhi reservasi
+  void _fulfillReservations(Book book) {
+    final bookId = book.id;
+    final reservations = _bookReservations[bookId] ?? [];
 
-    print("\nRESERVATION HISTORY");
-    print('============================');
-    for (var item in _reservation) {
-      print("Reserved Name    : ${item.member.name}");
-      print("Reserved Book    : ${item.book.title}");
-      print("Reservation Date : ${item.reservationDate}");
-      print('============================');
+    if (reservations.isNotEmpty) {
+      final nextReservation = reservations.first; // Mengambil reservasi pertama
+      nextReservation.fulfillmentDate = DateTime.now();
+
+      // Notifikasi atau proses pemenuhan reservasi
+      print(
+        "📩 Notification: '${book.title}' is now available for ${nextReservation.member.name}",
+      );
+
+      // Hapus dari antrian
+      reservations.removeAt(0);
     }
   }
-}
 
-class Reservation {
-  Member member;
-  Book book;
-  DateTime reservationDate;
+  // 📜 PRINT RESERVATION HISTORY
+  void printReservationHistory() {
+    if (_reservations.isEmpty) {
+      print("⚠ No reservations found");
+      return;
+    }
 
-  Reservation({
-    required this.member,
-    required this.book,
-    required this.reservationDate,
-  });
+    print("\n📋 Reservation History");
+    print("=" * 50);
+    for (var reservation in _reservations) {
+      final status = reservation.fulfillmentDate != null
+          ? "Fulfilled"
+          : "Active";
+      print("📘 ${reservation.book.title} - ${reservation.member.name}");
+      print("   Reserved: ${reservation.reservationDate}");
+      print("   Status: $status");
+      if (reservation.fulfillmentDate != null) {
+        print("   Fulfilled: ${reservation.fulfillmentDate}");
+      }
+      print("-" * 30);
+    }
+  }
+
+  // 📊 PRINT LIBRARY STATS
+  void printLibraryStats() {
+    print("\n📊 Library Statistics");
+    print("=" * 50);
+    print("📚 Total Books: ${_books.length}");
+    print("👤 Total Members: ${_members.length}");
+    print(
+      "📖 Borrowed Books: ${_borrowRecords.where((r) => r.returnDate == null).length}",
+    );
+    print(
+      "⏰ Active Reservations: ${_reservations.where((r) => r.fulfillmentDate == null).length}",
+    );
+
+    final totalPenalty = _members.fold<double>(
+      0,
+      (sum, member) => sum + member.penalty,
+    );
+    print("💰 Total Penalties: Rp$totalPenalty");
+  }
 }
 
 void main() {
   try {
-    var management = LibraryManagement();
+    final library = LibraryManagement();
 
-    // ------------ Physical Book ---------------
-    var PBook1 = PhysiqueBook(
+    // ------------ ADD BOOKS ---------------
+    final pBook1 = PhysiqueBook(
       id: "B001",
       title: "Beautiful in White",
       author: "Angga",
-      releaseDate: DateTime(2018, 11, 11, 20, 00),
+      releaseDate: DateTime(2018, 11, 11),
       category: BookCategory.romance,
       status: BookStatus.available,
       type: BookType.physique,
@@ -443,7 +511,7 @@ void main() {
       seriesNumber: "2",
     );
 
-    var PBook2 = PhysiqueBook(
+    final pBook2 = PhysiqueBook(
       id: "B002",
       title: "The Darkness of Our Brain",
       author: "Jenny",
@@ -455,12 +523,11 @@ void main() {
       seriesNumber: "1",
     );
 
-    // -------- DIGITAL BOOK -------------
-    var DBook1 = DigitalBook(
+    final dBook1 = DigitalBook(
       id: "B003",
       title: "September",
       author: "Angga",
-      releaseDate: DateTime(2019, 9, 23, 20, 00),
+      releaseDate: DateTime(2019, 9, 23),
       category: BookCategory.romance,
       status: BookStatus.available,
       type: BookType.digital,
@@ -469,27 +536,26 @@ void main() {
       link: "https://example.com",
     );
 
-    var DBook2 = DigitalBook(
+    final dBook2 = DigitalBook(
       id: "B004",
       title: "Earthquake Technology",
       author: "Angga",
-      releaseDate: DateTime(2019, 9, 23, 20, 00),
+      releaseDate: DateTime(2019, 9, 23),
       category: BookCategory.technology,
-      status: BookStatus.available,
+      status: BookStatus.reference, // Reference book
       type: BookType.digital,
       format: "PDF",
       fileSize: 200,
       link: "https://example.com",
     );
 
-    // ------------ ADD BOOK -----------
-    management.addBook(PBook1);
-    management.addBook(PBook2);
-    management.addBook(DBook1);
-    management.addBook(DBook2);
+    library.addBook(pBook1);
+    library.addBook(pBook2);
+    library.addBook(dBook1);
+    library.addBook(dBook2);
 
-    // ----------- MEMBER -------------
-    var member1 = Member(
+    // ----------- ADD MEMBERS -------------
+    final member1 = Member(
       id: "M001",
       name: "Wina",
       email: "wina23@gmail.com",
@@ -498,41 +564,93 @@ void main() {
       status: MemberStatus.active,
     );
 
-    var member2 = Member(
+    final member2 = Member(
       id: "M002",
       name: "Anne",
-      email: "Anne23@gmail.com",
-      major: "Economyc",
+      email: "anne23@gmail.com",
+      major: "Economy",
       position: MemberPosition.student,
       status: MemberStatus.active,
     );
 
-    // ------------- ADD MEMBER --------------
-    management.addMember(member1);
-    management.addMember(member2);
-
-    // ------------- ADD BORROW ----------------
-    management.borrowBook(
-      memberID: member1.id,
-      bookID: PBook1.id,
-      borrowDate: DateTime.now(),
+    final professor = Member(
+      id: "M003",
+      name: "Dr. Smith",
+      email: "smith@university.edu",
+      major: "Computer Science",
+      position: MemberPosition.professor,
+      status: MemberStatus.active,
     );
 
-    management.borrowBook(
-      memberID: member2.id,
-      bookID: DBook1.id,
-      borrowDate: DateTime.now(),
+    library.addMember(member1);
+    library.addMember(member2);
+    library.addMember(professor);
+
+    // ----------- BORROW BOOKS ------------
+    final now = DateTime.now();
+
+    // Member1 borrows a book
+    library.borrowBook(
+      memberId: member1.id,
+      bookId: pBook1.id,
+      borrowDate: now,
     );
 
-    // ------- RESERVE BOOK --------
-    management.reservedBook(
-      memberID: member1.id,
-      bookID: DBook1.id,
-      reservationDate: DateTime.now(),
+    // Member2 tries to borrow the same book (should fail)
+    try {
+      library.borrowBook(
+        memberId: member2.id,
+        bookId: pBook1.id,
+        borrowDate: now,
+      );
+    } catch (e) {
+      print("Expected error: $e");
+    }
+
+    // Member2 borrows a different book
+    library.borrowBook(
+      memberId: member2.id,
+      bookId: dBook1.id,
+      borrowDate: now,
     );
 
-    management.reservationHistory();
+    // Professor borrows a book
+    library.borrowBook(
+      memberId: professor.id,
+      bookId: pBook2.id,
+      borrowDate: now,
+    );
+
+    // ----------- RESERVE BOOKS -----------
+    // Member1 reserves the book that member2 borrowed
+    library.reserveBook(
+      memberId: member1.id,
+      bookId: dBook1.id,
+      reservationDate: now,
+    );
+
+    // ----------- RETURN BOOKS ------------
+    // Return a book after 15 days (1 day late for students)
+    final returnDate = now.add(Duration(days: 15));
+    library.returnBook(
+      memberId: member2.id,
+      bookId: dBook1.id,
+      returnDate: returnDate,
+    );
+
+    // ----------- PRINT INFO ------------
+    library.printBorrowHistory(member2.id);
+    library.printReservationHistory();
+    library.printLibraryStats();
+
+    // ----------- SEARCH BOOKS ------------
+    final romanceBooks = library.searchByCategory(BookCategory.romance);
+    library.printBooks(
+      romanceBooks,
+      searchType: "Category",
+      keyword: "romance",
+    );
   } catch (e) {
-    print(e);
+    print("Error: $e");
   }
 }
